@@ -24,15 +24,6 @@ noisevar_obs = ((1/3)*sqrt(S_max/n))^2;
 noisevar_init = 9;
 noisevar_sys = 1;
 
-% algorithm parameters
-FEN_thresh = 7e-2; % have to change this based on genie-aided KF (different for each Smax), and maybe some theoretical perspective?
-lambda_m = sqrt(2*log(m));
-delta = lambda_m*sqrt(noisevar_obs);
-
-% DS parameters
-eps = 1e-3;%TODO : see what this value means - tolerance for alternating direction method
-maxiter = 1e3; %TODO : check reasonable estimate for this
-
 Niter =100 ; % no of monte carlo simulations
 
 tvec = 1:1:10;
@@ -77,11 +68,11 @@ for k = 1:Niter
     end
     clear x y w v;
 
-    %% KF-CS Algorithm (known T1)
+    %% Genie-aided KF
     % Smax order filter, with T1 and T5 known
     P = zeros(m,m); % P=0 (initialising largest possible matrix)
     P_prior = NaN(m,m);
-    K = NaN(m,n);
+    K = NaN(m,n); % 
 
     T = T1;
     xcap = zeros(m,1);
@@ -89,6 +80,8 @@ for k = 1:Niter
     for t=tvec
         %% KF prediction and update
         %     eq (4) and (5)
+        % TODO : TAKE CARE OF ANY HANGING INDICES (not updated during these steps)
+
         xcap_prior = xcap;
         P_prior(T,T) = P(T,T) + noisevar_sys*eye(length(T));
 
@@ -108,25 +101,9 @@ for k = 1:Niter
         FEN = filt_error'*R_fe*filt_error; % Filtering error norm
         fprintf('\nt = %d FEN : %1.5e',t,FEN);
 
-        if(length(T)==S_max)
-            disp('Reached S_max... Not updating support');
-
-            if(FEN > FEN_thresh)
-                warning('FEN above threshold while Smax already reached!');
-            end
-
-        elseif(FEN > FEN_thresh)
-            %% Addition step
-            
-            % (a) Run CS (Dantzig Selector)
-            [betacap,iter,dval,time] = selector(A(:,Tc),eye(length(Tc)),' ',filt_error,delta,eps,maxiter);
-
-            % Threshold to estimate increase in support
-            nz = find(betacap.^2 > alpha_a);%careful here
-            Deltacap = Tc(nz);
-
-            % b. compute T_new
-            Tnew = union(T,Deltacap);
+        if (t==5)
+            Tnew = T5;
+            Deltacap = sort(setdiff(Tnew,T));
 
             % set T = Tnew, expand P_prior for additional supports
             T = Tnew;
@@ -149,9 +126,6 @@ for k = 1:Niter
             R_fe = (eye(n) - A(:,T)*K(T,:))*R_ie*(eye(n) - A(:,T)*K(T,:));
             FEN = filt_error'*R_fe*filt_error; % Filtering error norm
             fprintf('\nt = %d FEN : %1.5e  (new support)',t,FEN);
-            
-            % Deletion step (can try implementing as an exercise to show you did something extra)
-
         end
 
         MSE_vec(t) = MSE_vec(t) + norm(X(:,t)-xcap)^2; % should change for Monte Carlo
@@ -163,8 +137,3 @@ save("MSE_genie_vec_16.mat",'MSE_vec')
 figure;
 plot(tvec,MSE_vec);
 ylim([0,30]);
-
-%% Normal CS (Using DS?) Threshold values?
-
-
-%% Full KF
