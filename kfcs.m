@@ -25,10 +25,10 @@ noisevar_init = 9;
 noisevar_sys = 1;
 
 % algorithm parameters
-FEN_thresh = 7e-2; % have to change this based on genie-aided KF (different for each Smax), and maybe some theoretical perspective?
+FEN_thresh = 2e-2; % have to change this based on genie-aided KF (different for each Smax), and maybe some theoretical perspective?
 lambda_m = sqrt(2*log(m));
 delta = lambda_m*sqrt(noisevar_obs);
-alpha_a = 1.0;%threshold for addition (based on obtained values)
+alpha_a = 0.05;%threshold for addition (based on obtained values)
 
 % DS parameters
 eps = 1e-3;%TODO : see what this value means - tolerance for alternating direction method
@@ -41,7 +41,7 @@ tvec = 1:1:10;
 X = NaN(m,length(tvec));
 Y = NaN(n,length(tvec));
 
-MSE_vec = zeros(1,length(tvec));
+MSE_vec = zeros(Niter,length(tvec));
 
 for k = 1:Niter
     % Support sets
@@ -107,8 +107,7 @@ for k = 1:Niter
         filt_error = Y(:,t) - A*xcap;
         R_fe = (eye(n) - A(:,T)*K(T,:))*R_ie*(eye(n) - A(:,T)*K(T,:));
         FEN = filt_error'*R_fe*filt_error; % Filtering error norm
-        fprintf('\nt = %d FEN : %1.5e',t,FEN);
-
+        fprintf('t = %d FEN : %1.5e\n',t,FEN);
         if(length(T)==S_max)
             disp('Reached S_max... Not updating support');
 
@@ -131,6 +130,26 @@ for k = 1:Niter
 
             % set T = Tnew, expand P_prior for additional supports
             T = Tnew;
+            disp('added to support:');
+            disp(Deltacap);
+            if(length(T)==length(T5))
+                if(T~=T5)
+                    disp('Support of same size but not matching');
+                    disp('not added yet: ');
+                    disp(setdiff(T,T5));
+%                      disp('T'); disp(T);
+%                      disp('T5');disp(T5);
+                     disp([Tc(betacap~=0) betacap(betacap~=0).^2]);
+                end
+            else
+                 disp('Size not matching'); 
+                    disp('not added yet: ');
+                    disp(setdiff(T,T5));
+%                  disp('T'); disp(T);
+%                  disp('T5');disp(T5);
+                 disp([Tc(betacap~=0) betacap(betacap~=0).^2]);
+            end
+            
             P_prior(Deltacap,Deltacap) = noisevar_init*eye(length(Deltacap));
             P_prior(Deltacap,sort(setdiff(T,Deltacap))) = 0;
             P_prior(sort(setdiff(T,Deltacap)),Deltacap) = 0;
@@ -149,20 +168,42 @@ for k = 1:Niter
             filt_error = Y(:,t) - A*xcap;
             R_fe = (eye(n) - A(:,T)*K(T,:))*R_ie*(eye(n) - A(:,T)*K(T,:));
             FEN = filt_error'*R_fe*filt_error; % Filtering error norm
-            fprintf('\nt = %d FEN : %1.5e  (new support)',t,FEN);
+            fprintf('\nt = %d FEN : %1.5e  (new support)\n',t,FEN);
             
             % Deletion step (can try implementing as an exercise to show you did something extra)
 
         end
-
-        MSE_vec(t) = MSE_vec(t) + norm(X(:,t)-xcap)^2; % should change for Monte Carlo
+           
+        MSE_vec(k,t) = norm(X(:,t)-xcap)^2; % should change for Monte Carlo
     end
+     disp('10 steps complete')
+            if(length(T)==length(T5))
+                if(T~=T5)
+                    disp('Support of same size but not matching');
+                    disp('not added yet: ');
+                    disp(setdiff(T,T5));
+%                      disp('T'); disp(T);
+%                      disp('T5');disp(T5);
+%                      disp([Tc(betacap~=0) betacap(betacap~=0).^2]);
+                end
+            else
+                 disp('Size not matching'); 
+                    disp('not added yet: ');
+                    disp(setdiff(T,T5));
+%                  disp('T'); disp(T);
+%                  disp('T5');disp(T5);
+%                  disp([Tc(betacap~=0) betacap(betacap~=0).^2]);
+            end
  
 end
-MSE_vec = MSE_vec/Niter;
+% MSE_vec = MSE_vec./Niter;
 save("MSE_kfcs_known_8.mat",'MSE_vec')
 figure;
 plot(tvec,MSE_vec);
+
+figure;
+plot(tvec,sum(MSE_vec,1)./Niter);
+
 ylim([0,0.4]);
 
 %% Normal CS (Using DS?) Threshold values?
