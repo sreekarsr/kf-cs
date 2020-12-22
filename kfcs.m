@@ -28,6 +28,7 @@ noisevar_sys = 1;
 FEN_thresh = 7e-2; % have to change this based on genie-aided KF (different for each Smax), and maybe some theoretical perspective?
 lambda_m = sqrt(2*log(m));
 delta = lambda_m*sqrt(noisevar_obs);
+alpha_a = 1.0;%threshold for addition (based on obtained values)
 
 % DS parameters
 eps = 1e-3;%TODO : see what this value means - tolerance for alternating direction method
@@ -119,14 +120,14 @@ for k = 1:Niter
             %% Addition step
             
             % (a) Run CS (Dantzig Selector)
-            [betacap,iter,dval,time] = selector(A(:,Tc),eye(length(Tc)),' ',filt_error,delta,eps,maxiter);
+            [betacap,iter,dval,time] = selector(A(:,Tc),ones(length(Tc),1),' ',filt_error,delta,eps,maxiter);
 
             % Threshold to estimate increase in support
             nz = find(betacap.^2 > alpha_a);%careful here
             Deltacap = Tc(nz);
 
             % b. compute T_new
-            Tnew = union(T,Deltacap);
+            Tnew = sort(union(T,Deltacap));
 
             % set T = Tnew, expand P_prior for additional supports
             T = Tnew;
@@ -159,10 +160,10 @@ for k = 1:Niter
  
 end
 MSE_vec = MSE_vec/Niter;
-save("MSE_genie_vec_16.mat",'MSE_vec')
+save("MSE_kfcs_known_8.mat",'MSE_vec')
 figure;
 plot(tvec,MSE_vec);
-ylim([0,30]);
+ylim([0,0.4]);
 
 %% Normal CS (Using DS?) Threshold values?
 
