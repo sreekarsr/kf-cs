@@ -5,7 +5,7 @@ close all;
 % EE18B154 Sreekar Sai Ranganathan
 
 addpath ADMDS1.1; % for Dantzig Selector
-% Credits : YhongZhangAI
+% Credits : YongZhangAI
 
 %% Parameter Initialisation
 % Model Dimensions
@@ -24,15 +24,15 @@ noisevar_obs = ((1/3)*sqrt(S_max/n))^2;
 noisevar_init = 9;
 noisevar_sys = 1;
 
-% algorithm parameters
+% algorithm decision parameters
 FEN_thresh = 2e-2; % have to change this based on genie-aided KF (different for each Smax), and maybe some theoretical perspective?
-lambda_m = sqrt(2*log(m));
-delta = lambda_m*sqrt(noisevar_obs);
-alpha_a = 0.05;%threshold for addition (based on obtained values)
+alpha_a = 0.1;%threshold for addition (based on obtained values)
 
 % DS parameters
-eps = 1e-3;%TODO : see what this value means - tolerance for alternating direction method
-maxiter = 1e3; %TODO : check reasonable estimate for this
+lambda_m = sqrt(2*log(m));
+delta = lambda_m*sqrt(noisevar_obs);
+eps = 1e-3;
+maxiter = 100; % usually around 50 iterations sufficient
 
 Niter =100 ; % no of monte carlo simulations
 
@@ -84,7 +84,7 @@ for k = 1:Niter
     P_prior = NaN(m,m);
     K = NaN(m,n);
 
-    T = T1;
+    T = []; % T1 for known case
     xcap = zeros(m,1);
 
     for t=tvec
@@ -108,8 +108,8 @@ for k = 1:Niter
         R_fe = (eye(n) - A(:,T)*K(T,:))*R_ie*(eye(n) - A(:,T)*K(T,:));
         FEN = filt_error'*R_fe*filt_error; % Filtering error norm
         fprintf('t = %d FEN : %1.5e\n',t,FEN);
-        if(length(T)==S_max)
-            disp('Reached S_max... Not updating support');
+        if(length(T)>=S_max)
+            disp('Support size >= S_max... Not updating support');
 
             if(FEN > FEN_thresh)
                 warning('FEN above threshold while Smax already reached!');
