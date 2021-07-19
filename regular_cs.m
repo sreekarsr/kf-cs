@@ -82,11 +82,13 @@ for k = 1:Niter
     end
  
 end
-save("MSE_regular_cs.mat",'MSE_vec')
+
 figure;
 plot(tvec,MSE_vec);
 
+MSE_vec_avg = sum(MSE_vec,1)./Niter;
 figure;
-plot(tvec,sum(MSE_vec,1)./Niter);
-
+plot(tvec,MSE_vec_avg);
 % ylim([0,0.4]);
+
+save(sprintf("MSE_vec_regcs_%d.mat",S_max),'MSE_vec_avg');

@@ -1,5 +1,8 @@
 clear;
 close all;
+delete('log.txt');
+diary('log.txt');
+diary on;
 %% Kalman Filtered Compressed Sensing
 % Course Project : EE6110 Adaptive Signal Processing
 % EE18B154 Sreekar Sai Ranganathan
@@ -17,16 +20,17 @@ A = randn(n,m); % n × m i.i.d. Gaussian entries
 A = normc(A);% normalise each column of A
 
 % Maximum Sparsity of x_t
-S_max = 8;% maximum sparsity run for 8, 16, 25
+S_max = 25;% maximum sparsity run for 8, 16, 25
+type = "unknown";
+% algorithm decision parameters
+FEN_thresh =100; % have to change this based on genie-aided KF (different for each Smax), and maybe some theoretical perspective?
+alpha_a = 0.1;%threshold for addition (based on obtained values)
 
 % Noise Variances
 noisevar_obs = ((1/3)*sqrt(S_max/n))^2;
 noisevar_init = 9;
 noisevar_sys = 1;
 
-% algorithm decision parameters
-FEN_thresh = 2e-2; % have to change this based on genie-aided KF (different for each Smax), and maybe some theoretical perspective?
-alpha_a = 0.1;%threshold for addition (based on obtained values)
 
 % DS parameters
 lambda_m = sqrt(2*log(m));
@@ -51,8 +55,8 @@ for k = 1:Niter
 
     fprintf('\nIteration:%d\n',k);
     x = zeros(m,1);
-    T = [];% initialise support set
-    
+    T = [];% initialise support set for simulation
+
     %% Simulation (ground truth)
     for t=tvec
         Tlast = T;
@@ -84,9 +88,15 @@ for k = 1:Niter
     P_prior = NaN(m,m);
     K = NaN(m,n);
 
-    T = []; % T1 for known case
+    if(type=="known")
+        T=T1;
+    elseif(type=="unknown")
+        T = [];% initialise support set
+    end
     xcap = zeros(m,1);
-
+    disp('T1:');disp(T1);
+    disp('T5:');disp(T5);
+    disp('Delta:');disp(setdiff(T5,T1));
     for t=tvec
         %% KF prediction and update
         %     eq (4) and (5)
@@ -96,7 +106,6 @@ for k = 1:Niter
         R_ie = A(:,T)*P_prior(T,T)*(A(:,T)') + noisevar_obs*eye(n); % innovation error covariance - nxn matrix
         K(T,:) = P_prior(T,T)*(A(:,T)')*(inv(R_ie));
 
-        Tc = setdiff((1:m)',T);
         % assign new estimates
         xcap(T) = xcap_prior(T) +  K(T,:)*(Y(:,t) - A*xcap_prior);
         % xcap(Tc) = xcap(Tc); %redundant! for representational purposes
@@ -106,18 +115,14 @@ for k = 1:Niter
         % calculate filtering error norm
         filt_error = Y(:,t) - A*xcap;
         R_fe = (eye(n) - A(:,T)*K(T,:))*R_ie*(eye(n) - A(:,T)*K(T,:));
-        FEN = filt_error'*R_fe*filt_error; % Filtering error norm
+        FEN = filt_error'*inv(R_fe)*filt_error; % Filtering error norm
         fprintf('t = %d FEN : %1.5e\n',t,FEN);
-        if(length(T)>=S_max)
-            disp('Support size >= S_max... Not updating support');
 
-            if(FEN > FEN_thresh)
-                warning('FEN above threshold while Smax already reached!');
-            end
-
-        elseif(FEN > FEN_thresh)
+        if(FEN > FEN_thresh)
+            disp('FEN is greater than threshold');
             %% Addition step
-            
+            Tc = setdiff((1:m)',T);
+
             % (a) Run CS (Dantzig Selector)
             [betacap,iter,dval,time] = selector(A(:,Tc),ones(length(Tc),1),' ',filt_error,delta,eps,maxiter);
 
@@ -135,19 +140,37 @@ for k = 1:Niter
             if(length(T)==length(T5))
                 if(T~=T5)
                     disp('Support of same size but not matching');
-                    disp('not added yet: ');
-                    disp(setdiff(T,T5));
-%                      disp('T'); disp(T);
-%                      disp('T5');disp(T5);
+                    disp('Not added yet: ');
+                    if(t<5)
+                        disp(setdiff(T1,T));
+                    else
+                        disp(setdiff(T5,T));
+                    end
+                    disp('Extra added:');
+                    if(t<5)
+                        disp(setdiff(T,T1));
+                    else
+                        disp(setdiff(T,T5));
+                    end
+                     disp('beta values')
                      disp([Tc(betacap~=0) betacap(betacap~=0).^2]);
                 end
             else
                  disp('Size not matching'); 
-                    disp('not added yet: ');
-                    disp(setdiff(T,T5));
-%                  disp('T'); disp(T);
-%                  disp('T5');disp(T5);
-                 disp([Tc(betacap~=0) betacap(betacap~=0).^2]);
+                    disp('Not added yet: ');
+                    if(t<5)
+                        disp(setdiff(T1,T));
+                    else
+                        disp(setdiff(T5,T));
+                    end
+                    disp('Extra added:');
+                    if(t<5)
+                        disp(setdiff(T,T1));
+                    else
+                        disp(setdiff(T,T5));
+                    end
+                    disp('beta values')
+                    disp([Tc(betacap~=0) betacap(betacap~=0).^2]);
             end
             
             P_prior(Deltacap,Deltacap) = noisevar_init*eye(length(Deltacap));
@@ -167,7 +190,7 @@ for k = 1:Niter
             % Post-addition FEN     
             filt_error = Y(:,t) - A*xcap;
             R_fe = (eye(n) - A(:,T)*K(T,:))*R_ie*(eye(n) - A(:,T)*K(T,:));
-            FEN = filt_error'*R_fe*filt_error; % Filtering error norm
+            FEN = filt_error'*inv(R_fe)*filt_error; % Filtering error norm
             fprintf('\nt = %d FEN : %1.5e  (new support)\n',t,FEN);
             
             % Deletion step (can try implementing as an exercise to show you did something extra)
@@ -180,33 +203,48 @@ for k = 1:Niter
             if(length(T)==length(T5))
                 if(T~=T5)
                     disp('Support of same size but not matching');
-                    disp('not added yet: ');
-                    disp(setdiff(T,T5));
-%                      disp('T'); disp(T);
-%                      disp('T5');disp(T5);
-%                      disp([Tc(betacap~=0) betacap(betacap~=0).^2]);
+                     disp('Not added yet: ');
+                    if(t<5)
+                        disp(setdiff(T1,T));
+                    else
+                        disp(setdiff(T5,T));
+                    end
+                    disp('Extra added:');
+                    if(t<5)
+                        disp(setdiff(T,T1));
+                    else
+                        disp(setdiff(T,T5));
+                    end
                 end
             else
                  disp('Size not matching'); 
-                    disp('not added yet: ');
-                    disp(setdiff(T,T5));
-%                  disp('T'); disp(T);
-%                  disp('T5');disp(T5);
-%                  disp([Tc(betacap~=0) betacap(betacap~=0).^2]);
+                   disp('Not added yet: ');
+                    if(t<5)
+                        disp(setdiff(T1,T));
+                    else
+                        disp(setdiff(T5,T));
+                    end
+                    disp('Extra added:');
+                    if(t<5)
+                        disp(setdiff(T,T1));
+                    else
+                        disp(setdiff(T,T5));
+                    end
             end
  
 end
-% MSE_vec = MSE_vec./Niter;
-save("MSE_kfcs_known_8.mat",'MSE_vec')
+
 figure;
 plot(tvec,MSE_vec);
 
+MSE_vec_avg = sum(MSE_vec,1)./Niter;
 figure;
-plot(tvec,sum(MSE_vec,1)./Niter);
+plot(tvec,MSE_vec_avg);
+ylim([0,30]);
+% ylim([0 0.4]);
+% ylim([0 5]);
+xlim([1 10]);
 
-ylim([0,0.4]);
+save(sprintf("MSE_vec_kfcs_%s_%d.mat",type,S_max),'MSE_vec_avg')
 
-%% Normal CS (Using DS?) Threshold values?
-
-
-%% Full KF
+diary off;

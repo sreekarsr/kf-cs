@@ -17,7 +17,7 @@ A = randn(n,m); % n × m i.i.d. Gaussian entries
 A = normc(A);% normalise each column of A
 
 % Maximum Sparsity of x_t
-S_max = 8;% maximum sparsity run for 8, 16, 25
+S_max = 25;% maximum sparsity run for 8, 16, 25
 
 % Noise Variances
 noisevar_obs = ((1/3)*sqrt(S_max/n))^2;
@@ -31,7 +31,7 @@ tvec = 1:1:10;
 X = NaN(m,length(tvec));
 Y = NaN(n,length(tvec));
 
-MSE_vec = zeros(1,length(tvec));
+MSE_vec = zeros(Niter,length(tvec));
 
 for k = 1:Niter
     % Support sets
@@ -93,13 +93,20 @@ for k = 1:Niter
         % xcap(Tc) = xcap(Tc); %redundant! for representational purposes
         P(T,T) = (eye(length(T)) - K(T,:)*A(:,T))*P_prior(T,T);
 
+        MSE_vec(k,t) = norm(X(:,t)-xcap)^2; % should change for Monte Carlo
 
-        MSE_vec(t) = MSE_vec(t) + norm(X(:,t)-xcap)^2; % should change for Monte Carlo
+%         MSE_vec(t) = MSE_vec(t) + norm(X(:,t)-xcap)^2; % should change for Monte Carlo
     end
  
 end
-MSE_vec = MSE_vec/Niter;
-save("MSE_fullKF_8.mat",'MSE_vec')
+
 figure;
 plot(tvec,MSE_vec);
-% ylim([0,30]);
+
+MSE_vec_avg = sum(MSE_vec,1)./Niter;
+figure;
+plot(tvec,MSE_vec_avg);
+% ylim([0,0.4]);
+
+save(sprintf("MSE_vec_fullkf_%d.mat",S_max),'MSE_vec_avg');
+
